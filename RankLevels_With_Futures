@@ -1,0 +1,84 @@
+# Started from a base from Dr. Data on Tastytrade a few years ago
+declare lower;
+declare hide_on_intraday;
+
+input DisplayIVRank = yes;
+input DisplayIVPercentile = yes;
+input DisplayImpVolatility = yes;
+input DisplayDaily1StandardDev = yes;
+input DisplayWeekly1StandardDev = yes;
+input DisplayMonthly1StandardDev = yes;
+
+input TimePeriod = 252;
+
+# implied volatility
+# using proxies for futures
+def vol = 
+if (GetSymbol() == "/ES") then close("VIX") / 100
+else if (GetSymbol() == "/CL") then close("OIV") / 100 
+else if (GetSymbol() == "/GC") then close("GVX") / 100 
+else if (GetSymbol() == "/SI") then close("VXSLV") / 100 
+else if (GetSymbol() == "/NQ") then close("VXN") / 100 
+else if (GetSymbol() == "/TF") then close("RVX") / 100 
+else if (GetSymbol() == "/YM") then close("VXD") / 100 
+else if (GetSymbol() == "/6E") then close("EVZ") / 100 
+else if (GetSymbol() == "/6J") then close("JYVIX") / 100 
+else if (GetSymbol() == "/6B") then close("BPVIX") / 100 
+else if (GetSymbol() == "/ZN") then close("TYVIX") / 100 
+else if (GetSymbol() == "/ZW") then close("WIV") / 100
+else if (GetSymbol() == "/ZB") then imp_volatility("TLT") 
+else if (GetSymbol() == "/ZC") then imp_volatility("CORN") 
+else if (GetSymbol() == "/ZS") then imp_volatility("SOYB") 
+else if (GetSymbol() == "/KC") then imp_volatility("JO") 
+else if (GetSymbol() == "/NG") then imp_volatility("UNG") 
+else if (GetSymbol() == "/6S") then imp_volatility("FXF") 
+else imp_volatility();
+
+def data = if !IsNaN(vol) then vol else vol[-1];
+def hi = Highest(data, TimePeriod);
+def lo = Lowest(data, TimePeriod);
+def iv_rank = (data - lo) / (hi - lo) * 100;
+plot Percentile = iv_rank;
+Percentile.SetLineWeight(3);
+Percentile.AssignValueColor(if iv_rank > 50 then Color.GREEN else if iv_rank > 25 then Color.YELLOW else Color.RED);
+def lowend = Percentile < 25;
+def highend = Percentile > 50;
+
+AddLabel(DisplayIVRank , Concat("IV Rank: ", AsPercent(Percentile / 100)), if lowend then Color.RED else if highend then Color.GREEN else Color.YELLOW);
+
+# calculate the IV percentile
+# ---------------------------
+# how many times over the past year, has IV been below the current IV
+def counts_below = fold i = 1 to TimePeriod + 1 with count = 0
+do
+  if data[0] > data[i] then 
+    count + 1
+  else
+    count;
+
+def iv_percentile = Round(counts_below / TimePeriod * 100.0, 0);
+#plot IVPercentile = iv_percentile;
+#IVPercentile.SetDefaultColor(Color.RED);
+AddLabel(DisplayIVPercentile, "IV Percentile: " + iv_percentile + "% of days (over the past " + TimePeriod + " days) were below the current IV", if lowend then Color.RED else if highend then Color.GREEN else Color.YELLOW);
+;
+
+
+AddLabel(DisplayImpVolatility, Concat("ImpVolatility: ", AsPercent(vol)), if lowend then Color.RED else if highend then Color.GREEN else Color.YELLOW);
+
+def ImpPts = (vol / Sqrt(252)) * close;
+AddLabel(DisplayDaily1StandardDev , Concat("Daily 1 SD +/- $", AsText( ImpPts, NumberFormat.TWO_DECIMAL_PLACES)), if lowend then Color.RED else if highend then Color.GREEN else Color.YELLOW);
+;
+
+def ImpPts2 = (vol / Sqrt(52)) * close;
+AddLabel(DisplayWeekly1StandardDev, Concat("Weekly 1 SD +/- $", AsText( ImpPts2, NumberFormat.TWO_DECIMAL_PLACES)), if lowend then Color.RED else if highend then Color.GREEN else Color.YELLOW);
+;
+
+def ImpPts3 = (vol / Sqrt(12)) * close;
+AddLabel(DisplayMonthly1StandardDev, Concat("Monthly 1 SD +/- $", AsText( ImpPts3, NumberFormat.TWO_DECIMAL_PLACES)), if lowend then Color.RED else if highend then Color.GREEN else Color.YELLOW);
+;
+
+plot LowVol = 25;
+plot HighVol = 50;
+
+LowVol.SetDefaultColor(GetColor(5));
+HighVol.SetDefaultColor(GetColor(6));
